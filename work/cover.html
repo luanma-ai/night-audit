@@ -2,19 +2,14 @@
 <html><body style="margin:0;background:#0a0d15">
 <canvas id="c" width="1280" height="768"></canvas>
 <script type="module">
-// Renders the title card over the live room exactly as the game draws it, and
-// records the canvas to a PNG the screenshot tool saves. Used for the cover only.
+// Renders the cover poster with the game's own drawing code and holds the frame,
+// so the screenshot tool saves exactly what the game would show.
 const cfg = await import('./src/config.js');
-const sim = await import('./src/sim.js');
-const rend = await import('./src/render.js');
-const title = await import('./src/title.js');
+const cover = await import('./src/cover.js');
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-const game = sim.createGame();
-title.drawTitle(ctx, 0, (cc) => rend.drawTitleRoom(cc, game));
-
-// keep a PNG of this exact frame so the shooter can save it byte for byte
-window.__cover = canvas.toDataURL('image/png');
+const game = cover.buildCoverGame();
+cover.paintCover(ctx, game, 0);
 document.title = 'cover-ready';
 </script></body></html>
