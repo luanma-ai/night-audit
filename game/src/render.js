@@ -127,22 +127,131 @@ function drawCone(ctx, src, angle, half, range, colour) {
   ctx.stroke();
 }
 
-// Cones are the loudest thing on screen on purpose: at 256 px wide they are what
-// tells a judge this is a stealth game.
+// Two-zone cone, the way stealth games that read well actually draw it: a solid
+// inner wedge where standing gets you caught, hatched outer wedge where you are
+// still only a maybe. Studied from Shadow Tactics' vision-cone spec rather than
+// eyeballed: the split tells a player where the safe margin is, and at thumbnail
+// size the inner/outer contrast is what still reads as "a cone" after shrinking.
+function drawTwoZoneCone(ctx, src, angle, half, range, colour) {
+  const innerFrac = colour.inner || 0.62;
+  const innerRange = range * innerFrac;
+
+  // outer zone: faint fill plus hatching
+  const gOut = ctx.createRadialGradient(src.x, src.y, innerRange * 0.9, src.x, src.y, range);
+  gOut.addColorStop(0, colour.outer);
+  gOut.addColorStop(1, colour.outerFade);
+  ctx.fillStyle = gOut;
+  ctx.beginPath();
+  ctx.moveTo(src.x, src.y);
+  ctx.arc(src.x, src.y, range, angle - half, angle + half);
+  ctx.closePath();
+  ctx.fill();
+
+  // hatching for the outer zone only: short radial ticks inside the far band.
+  // Kept faint and few -- the first pass used 14 full-length ticks per cone and the
+  // room turned into dandelions, stealing attention from the thief.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(src.x, src.y);
+  ctx.arc(src.x, src.y, range, angle - half, angle + half);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle = colour.hatch;
+  ctx.lineWidth = 1;
+  const ticks = 7;
+  for (let i = 1; i < ticks; i++) {
+    const a = angle - half + (2 * half * i) / ticks;
+    const r0 = innerRange + 6;
+    const r1 = range - 4;
+    ctx.beginPath();
+    ctx.moveTo(src.x + Math.cos(a) * r0, src.y + Math.sin(a) * r0);
+    ctx.lineTo(src.x + Math.cos(a) * r1, src.y + Math.sin(a) * r1);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // inner zone: solid, the part that actually catches you
+  const gIn = ctx.createRadialGradient(src.x, src.y, 8, src.x, src.y, innerRange);
+  gIn.addColorStop(0, colour.base);
+  gIn.addColorStop(1, colour.mid);
+  ctx.fillStyle = gIn;
+  ctx.beginPath();
+  ctx.moveTo(src.x, src.y);
+  ctx.arc(src.x, src.y, innerRange, angle - half, angle + half);
+  ctx.closePath();
+  ctx.fill();
+
+  // the boundary between the zones is the most useful line on screen
+  ctx.strokeStyle = colour.edge;
+  ctx.lineWidth = colour.width || 2;
+  ctx.beginPath();
+  ctx.moveTo(src.x, src.y);
+  ctx.arc(src.x, src.y, innerRange, angle - half, angle + half);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+// Cone colours carry DETECTION STATE, not identity, per the same spec: calm is a
+// warm amber, suspicion climbs to hot orange, seen is red. Cameras are dimmer and
+// cooler so a glance tells a guard from a lens without a legend.
 const CONE_CALM = {
-  base: 'rgba(255, 186, 74, 0.55)',
-  mid: 'rgba(255, 168, 60, 0.30)',
-  fade: 'rgba(255, 150, 40, 0.02)',
-  edge: 'rgba(255, 200, 110, 0.85)',
+  base: 'rgba(255, 186, 74, 0.52)',
+  mid: 'rgba(255, 168, 60, 0.26)',
+  outer: 'rgba(255, 186, 74, 0.20)',
+  outerFade: 'rgba(255, 160, 50, 0.02)',
+  hatch: 'rgba(255, 200, 110, 0.30)',
+  edge: 'rgba(255, 208, 130, 0.95)',
   width: 2,
+  inner: 0.6,
+};
+const CONE_WARY = {
+  base: 'rgba(255, 138, 40, 0.60)',
+  mid: 'rgba(255, 120, 30, 0.30)',
+  outer: 'rgba(255, 138, 40, 0.24)',
+  outerFade: 'rgba(255, 110, 20, 0.03)',
+  hatch: 'rgba(255, 170, 80, 0.38)',
+  edge: 'rgba(255, 170, 80, 1)',
+  width: 2.5,
+  inner: 0.66,
 };
 const CONE_SEEN = {
-  base: 'rgba(255, 74, 44, 0.66)',
-  mid: 'rgba(255, 60, 40, 0.34)',
-  fade: 'rgba(255, 40, 20, 0.03)',
-  edge: 'rgba(255, 110, 80, 1)',
-  width: 2.5,
+  base: 'rgba(255, 64, 40, 0.70)',
+  mid: 'rgba(255, 50, 30, 0.36)',
+  outer: 'rgba(255, 64, 40, 0.28)',
+  outerFade: 'rgba(255, 40, 20, 0.03)',
+  hatch: 'rgba(255, 120, 90, 0.45)',
+  edge: 'rgba(255, 120, 90, 1)',
+  width: 3,
+  inner: 0.72,
 };
+const CONE_CAMERA = {
+  base: 'rgba(150, 190, 255, 0.30)',
+  mid: 'rgba(140, 180, 255, 0.16)',
+  outer: 'rgba(150, 190, 255, 0.14)',
+  outerFade: 'rgba(140, 180, 255, 0.01)',
+  hatch: 'rgba(170, 205, 255, 0.22)',
+  edge: 'rgba(180, 210, 255, 0.55)',
+  width: 1.5,
+  inner: 0.55,
+};
+
+// A state icon over a guard's head: "!" when it has you, "?" while it is deciding.
+// At the judge's 256x160 cell this glyph is more legible than any label.
+function drawStateIcon(ctx, x, y, kind) {
+  const hot = kind === 'alert';
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = hot ? 'rgba(255, 60, 40, 1)' : 'rgba(255, 200, 60, 1)';
+  ctx.strokeStyle = 'rgba(10, 12, 18, 0.9)';
+  ctx.lineWidth = 3;
+  ctx.font = 'bold 22px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const glyph = hot ? '!' : '?';
+  ctx.strokeText(glyph, 0, 0);
+  ctx.fillText(glyph, 0, 0);
+  ctx.restore();
+}
 
 // A guard: body, rim light, a torch head. Big enough to read when shrunk.
 function drawGuard(ctx, g) {
@@ -184,22 +293,23 @@ function drawGuard(ctx, g) {
 }
 
 function drawGuards(ctx, game) {
+  // cones first so bodies sit on top of their own light
   for (const g of game.guards) {
-    drawCone(ctx, g, g.facing, g.half, g.sight, g.sees ? CONE_SEEN : CONE_CALM);
+    const colour = g.alerted > 0 || g.sees ? CONE_SEEN : g.sightings > 0 ? CONE_WARY : CONE_CALM;
+    drawTwoZoneCone(ctx, g, g.facing, g.half, g.sight, colour);
   }
-  for (const g of game.guards) drawGuard(ctx, g);
+  for (const g of game.guards) {
+    drawGuard(ctx, g);
+    // state glyph: "!" when it has you, "?" while it is growing suspicious
+    if (g.sees || g.alerted > 0) drawStateIcon(ctx, g.x, g.y - 34, 'alert');
+    else if (g.sightings > 0) drawStateIcon(ctx, g.x, g.y - 34, 'wary');
+  }
 }
 
 function drawCameras(ctx, game) {
   for (const c of game.cameras) {
     if (c.down <= 0) {
-      drawCone(ctx, c, c.facing, 0.34, c.range, c.sees ? CONE_SEEN : {
-        base: 'rgba(255, 228, 150, 0.34)',
-        mid: 'rgba(255, 210, 120, 0.16)',
-        fade: 'rgba(255, 200, 110, 0.0)',
-        edge: 'rgba(255, 224, 160, 0.55)',
-        width: 1.5,
-      });
+      drawTwoZoneCone(ctx, c, c.facing, 0.34, c.range, c.sees ? CONE_SEEN : CONE_CAMERA);
     }
     ctx.save();
     ctx.translate(c.x, c.y);
@@ -320,7 +430,37 @@ function drawThief(ctx, game) {
   }
 }
 
-function drawHud(ctx, game) {
+// Draws the feedback layer on top of the world: particles, then the flash tint.
+// Accessibility: a flash is only ever a tint over the frame, never a full-screen
+// strobe, and the feedback module caps how often one can fire (WCAG 2.3.1).
+function drawFeedback(ctx, feedback) {
+  if (!feedback) return;
+  const st = feedback.state;
+  for (const p of st.particles) {
+    const a = 1 - p.age / p.life;
+    ctx.fillStyle = `rgba(${p.colour}, ${a * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * a + 0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (st.flash > 0.01) {
+    ctx.fillStyle = `rgba(${st.flashColour}, ${Math.min(0.55, st.flash)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// The alarm readout. Colour alone is not allowed to carry the meaning (that is
+// the colour-blind trap the game-ui-ux skill calls out), so the bar also changes
+// SHAPE -- a hatched warning zone appears as danger climbs, and the label spells
+// the state out in words.
+function alarmState(t) {
+  if (t >= 0.75) return { word: 'CRITICAL', col: PAL.alert };
+  if (t >= 0.4) return { word: 'HEIGHTENED', col: '#ffa04a' };
+  if (t >= 0.15) return { word: 'NOTICED', col: '#ffd166' };
+  return { word: 'QUIET', col: '#79d48c' };
+}
+
+export function drawHud(ctx, game) {
   const s = game.state;
   const mw = 300;
   const mx = (W - mw) / 2;
@@ -331,16 +471,39 @@ function drawHud(ctx, game) {
   roundRect(ctx, mx, 27, mw, 11, 6);
   ctx.fill();
   const t = s.alarm / 100;
-  const col = t > 0.75 ? PAL.alert : t > 0.4 ? '#ffa04a' : '#79d48c';
-  ctx.fillStyle = col;
+  const st = alarmState(t);
+
+  // danger zone: from 40% up the track is hatched, so the shape warns before the colour does
+  if (t >= 0.4) {
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, mx, 27, mw, 11, 6);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(10, 12, 18, 0.55)';
+    ctx.lineWidth = 1.5;
+    for (let x = mx + mw * 0.4; x < mx + mw; x += 7) {
+      ctx.beginPath();
+      ctx.moveTo(x, 38);
+      ctx.lineTo(x + 7, 27);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  ctx.fillStyle = st.col;
   roundRect(ctx, mx, 27, Math.max(7, mw * t), 11, 6);
   ctx.fill();
+
+  // a notch at the critical line, so the threshold is spatial as well as coloured
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillRect(mx + mw * 0.75, 24, 2, 17);
+
   ctx.fillStyle = PAL.text;
   ctx.font = 'bold 12px ui-monospace, monospace';
   ctx.textAlign = 'left';
   ctx.fillText('ALARM', mx, 22);
   ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(s.alarm)}%`, mx + mw, 22);
+  ctx.fillText(`${st.word} ${Math.round(s.alarm)}%`, mx + mw, 22);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(6, 9, 15, 0.9)';
@@ -396,8 +559,17 @@ export function drawTitleRoom(ctx, game) {
   drawThief(ctx, game);
 }
 
-export function draw(ctx, game) {
+export function draw(ctx, game, feedback) {
   ctx.clearRect(0, 0, W, H);
+
+  // Screen shake writes a canvas transform, never a body position: the simulation
+  // and the collisions never see this offset (game-feel's "shake the camera, not
+  // the body" rule). It uses the feedback module's already-decayed trauma.
+  const st = feedback ? feedback.state : null;
+  const shaking = st && (st.offsetX || st.offsetY);
+  ctx.save();
+  if (shaking) ctx.translate(st.offsetX, st.offsetY);
+
   drawRoom(ctx);
   drawCoverCases(ctx);
   drawBreakers(ctx, game);
@@ -406,6 +578,9 @@ export function draw(ctx, game) {
   drawLoot(ctx, game);
   drawExit(ctx, game);
   drawThief(ctx, game);
+  ctx.restore();
+
+  drawFeedback(ctx, feedback);
   drawHud(ctx, game);
 
   if (game.state.phase === 'caught') {

@@ -6,6 +6,8 @@ import { createGame } from './sim.js';
 import { draw, drawTitleRoom } from './render.js';
 import { drawTitle } from './title.js';
 import { SHOTS } from './shots.js';
+import { createFeedback } from './feedback.js';
+import { attachFeedback } from './hooks.js';
 
 function makeCanvas() {
   const found = typeof document !== 'undefined' && document.getElementById('game');
@@ -32,12 +34,16 @@ const scripted = shotName && shotName in SHOTS;
 const frozen = params.has('noanim');
 
 let game = createGame();
+let feedback = createFeedback();
+let tickFeedback = attachFeedback(game, feedback);
 // A scripted still starts straight in play; a normal launch opens on the title card.
 let mode = scripted ? 'play' : 'title';
 let elapsed = 0;
 
 function reset() {
   game = createGame();
+  feedback = createFeedback();
+  tickFeedback = attachFeedback(game, feedback);
   mode = 'play';
 }
 
@@ -71,7 +77,8 @@ function frame(now) {
     if (mode === 'title') drawTitle(ctx, elapsed, (c) => drawTitleRoom(c, game));
     else {
       game.update(dt * 0.25, input);
-      draw(ctx, game);
+      tickFeedback(dt, now);
+      draw(ctx, game, feedback);
     }
     requestAnimationFrame(frame);
     return;
@@ -93,7 +100,8 @@ function frame(now) {
   }
 
   game.update(dt, input);
-  draw(ctx, game);
+  tickFeedback(dt, now);
+  draw(ctx, game, feedback);
   input.endFrame();
   requestAnimationFrame(frame);
 }
@@ -103,7 +111,7 @@ function frame(now) {
 // so the first picture must not wait for one.
 if (ctx) {
   if (mode === 'title') drawTitle(ctx, 0, (c) => drawTitleRoom(c, game));
-  else draw(ctx, game);
+  else draw(ctx, game, feedback);
 }
 if (frozen) {
   if (typeof window !== 'undefined') window.__nightAudit = { game: () => game, reset, startWith, frozen: true };
