@@ -5,14 +5,18 @@ import { W, H, config } from './config.js';
 const TITLE = 'NIGHT AUDIT';
 const SUB = 'The Lockwood Museum, one night, three pieces';
 
-export function drawTitle(ctx, t) {
-  ctx.fillStyle = 'rgba(8, 11, 18, 0.86)';
+// Draws the title card over a live room, so a player waiting on the menu already
+// sees what the night looks like: cones sweeping, cameras panning, loot glowing.
+export function drawTitle(ctx, t, room) {
+  if (room) room(ctx);
+
+  ctx.fillStyle = 'rgba(8, 11, 18, 0.72)';
   ctx.fillRect(0, 0, W, H);
 
   // a slow amber sweep behind the title, the same colour as a guard's cone
   const cx = W * 0.5 + Math.sin(t * 0.35) * 120;
   const grad = ctx.createRadialGradient(cx, H * 0.42, 20, cx, H * 0.42, 460);
-  grad.addColorStop(0, 'rgba(255, 196, 110, 0.20)');
+  grad.addColorStop(0, 'rgba(255, 196, 110, 0.22)');
   grad.addColorStop(1, 'rgba(255, 196, 110, 0)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
@@ -21,7 +25,7 @@ export function drawTitle(ctx, t) {
   ctx.fillStyle = '#ffd479';
   ctx.font = 'bold 52px ui-monospace, monospace';
   ctx.fillText(TITLE, W / 2, H * 0.36);
-  ctx.fillStyle = '#8fa0c0';
+  ctx.fillStyle = '#9fb0cc';
   ctx.font = 'bold 14px ui-monospace, monospace';
   ctx.fillText(SUB, W / 2, H * 0.36 + 26);
 
@@ -41,7 +45,7 @@ export function drawTitle(ctx, t) {
     ctx.fillStyle = '#e8eefb';
     ctx.fillText(k, W / 2 - 12, y);
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#7d8aa6';
+    ctx.fillStyle = '#8d9bb7';
     ctx.fillText(d, W / 2 + 12, y);
   });
 
@@ -49,7 +53,7 @@ export function drawTitle(ctx, t) {
   ctx.fillStyle = `rgba(255, 212, 121, ${0.55 + 0.45 * Math.sin(t * 3)})`;
   ctx.font = 'bold 15px ui-monospace, monospace';
   ctx.fillText('PRESS SPACE TO BEGIN', W / 2, H - 44);
-  ctx.fillStyle = '#5d6a85';
+  ctx.fillStyle = '#6b7894';
   ctx.font = '11px ui-monospace, monospace';
   ctx.fillText(`${config.lootGoal} pieces, one alarm meter, no second chance`, W / 2, H - 22);
 }

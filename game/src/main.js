@@ -3,8 +3,8 @@
 import { W, H } from './config.js';
 import { createInput } from './input.js';
 import { createGame } from './sim.js';
-import { draw } from './render.js';
-import { drawTitle } from './title.js';
+import { draw, drawTitleRoom } from './render.js';
+
 import { SHOTS } from './shots.js';
 
 function makeCanvas() {
@@ -52,6 +52,8 @@ function startWith(shot) {
 }
 
 if (scripted) startWith(shotName);
+// A scripted title still must actually be on the title card, not the room behind it.
+if (scripted && shotName === 'start') mode = 'title';
 
 const input = createInput(canvas || { addEventListener() {} });
 let last = 0;
@@ -66,7 +68,7 @@ function frame(now) {
 
   if (scripted) {
     // a scripted still: hold the pose and let the cones drift slowly
-    if (mode === 'title') drawTitle(ctx, elapsed);
+    if (mode === 'title') drawTitle(ctx, elapsed, (c) => drawTitleRoom(c, game));
     else {
       game.update(dt * 0.25, input);
       draw(ctx, game);
@@ -76,7 +78,7 @@ function frame(now) {
   }
 
   if (mode === 'title') {
-    drawTitle(ctx, elapsed);
+    drawTitle(ctx, elapsed, (c) => drawTitleRoom(c, game));
     if (input.took(' ') || input.took('Enter')) reset();
     input.endFrame();
     requestAnimationFrame(frame);
@@ -100,7 +102,7 @@ function frame(now) {
 // A headless browser may screenshot before any requestAnimationFrame callback runs,
 // so the first picture must not wait for one.
 if (ctx) {
-  if (mode === 'title') drawTitle(ctx, 0);
+  if (mode === 'title') drawTitle(ctx, 0, (c) => drawTitleRoom(c, game));
   else draw(ctx, game);
 }
 if (frozen) {

@@ -308,6 +308,18 @@ function drawHud(ctx, game) {
   }
 }
 
+// The room behind the title card: the same night, without the HUD.
+export function drawTitleRoom(ctx, game) {
+  drawRoom(ctx);
+  drawCoverCases(ctx);
+  drawBreakers(ctx, game);
+  drawCameras(ctx, game);
+  drawGuards(ctx, game);
+  drawLoot(ctx, game);
+  drawExit(ctx, game);
+  drawThief(ctx, game);
+}
+
 export function draw(ctx, game) {
   ctx.clearRect(0, 0, W, H);
   drawRoom(ctx);
@@ -319,7 +331,6 @@ export function draw(ctx, game) {
   drawExit(ctx, game);
   drawThief(ctx, game);
   drawHud(ctx, game);
-
   if (game.state.phase === 'caught') {
     ctx.fillStyle = 'rgba(40, 0, 0, 0.55)';
     ctx.fillRect(0, 0, W, H);
