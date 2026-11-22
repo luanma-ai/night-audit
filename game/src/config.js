@@ -17,9 +17,11 @@ export const config = {
   sprintSpeed: 196,
   sneakSpeed: 88,          // was 62: hiding should not cost half the night
 
-  // Alarm, in points out of 100.
+  // Cameras are the ambient threat, not the main one: they outnumber the guards and
+  // reach further, so they charge less per sighting. (Measured: with 19 they were
+  // 4 of 5 deaths, which made the guards pointless dressing.)
   sightCost: 30,           // one clean sighting from a guard
-  cameraSightCost: 19,     // a camera is cheaper to blunder into
+  cameraSightCost: 15,     // a camera is cheaper to blunder into
   refireSeconds: 1.5,      // a cone that keeps you in view keeps charging
   alarmDecay: 11,          // per second, once nothing is looking at you
   decayDelay: 1.0,         // seconds of grace after the last cone lets go

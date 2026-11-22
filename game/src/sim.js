@@ -38,6 +38,7 @@ export function createGame() {
     cooldown: 0,
     charging: false,
     alerted: 0,
+    gaveUpFor: 0,
     sightings: 0,
     alertTimer: 0,
     index: i,
@@ -179,11 +180,14 @@ export function createGame() {
     for (const g of guards) {
       g.sees = false;
 
-      // A guard who has seen you breaks off the patrol and closes in. It gives up
-      // after a few seconds out of sight and walks back, so one slip costs alarm,
-      // distance and a few seconds -- never an instant, unfair loss.
+      // A guard who has seen you twice breaks off the patrol and closes in.
+      //
+      // It keeps chasing while it can still see you, and only starts counting down
+      // once it has lost sight. (The first fix decremented this timer every frame
+      // regardless, so every chase ended after exactly 5 s even with the thief
+      // standing still in front of the guard -- it read as the guard giving up on
+      // nothing, and it made fleeing meaningless.)
       if (g.alerted > 0) {
-        g.alerted -= dt;
         const ax = player.x - g.x;
         const ay = player.y - g.y;
         const ad = Math.hypot(ax, ay) || 1;
@@ -191,6 +195,10 @@ export function createGame() {
         g.facing += angleDelta(g.facing, chaseAngle) * Math.min(1, dt * 8);
         const lunge = g.speed * 2.1 * dt;
         if (ad > 26) moveCircle(map, g, Math.cos(chaseAngle) * lunge, Math.sin(chaseAngle) * lunge, 10);
+
+        const canSee = inCone(map, g, g.facing, g.half * 1.35, g.sight, player);
+        g.sees = canSee;
+
         if (ad < 22 && state.alarm < 100) {
           // caught in the open: the guard holds you and the alarm climbs, but
           // slowly enough that turning and running still saves the night
@@ -201,8 +209,16 @@ export function createGame() {
             say(`${g.name} has you. Break away!`, 1.6);
           }
         }
-        const stillSees = inCone(map, g, g.facing, g.half * 1.35, g.sight, player);
-        g.sees = stillSees;
+
+        if (canSee) {
+          // still on you: the chase clock is held full, it does not tick away
+          g.alerted = config.chaseSeconds;
+          g.gaveUpFor = 0;
+        } else {
+          // lost you: now it counts down, and only then does the guard go back
+          g.gaveUpFor += dt;
+          g.alerted = Math.max(0, config.chaseSeconds - g.gaveUpFor);
+        }
         continue;
       }
 
