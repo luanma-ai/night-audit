@@ -20,11 +20,11 @@ export const config = {
   // Cameras are the ambient threat, not the main one: they outnumber the guards and
   // reach further, so they charge less per sighting. (Measured: with 19 they were
   // 4 of 5 deaths, which made the guards pointless dressing.)
-  sightCost: 30,           // one clean sighting from a guard
+  sightCost: 36,           // one clean sighting from a guard
   cameraSightCost: 15,     // a camera is cheaper to blunder into
-  refireSeconds: 1.5,      // a cone that keeps you in view keeps charging
-  alarmDecay: 11,          // per second, once nothing is looking at you
-  decayDelay: 1.0,         // seconds of grace after the last cone lets go
+  refireSeconds: 1.3,      // a cone that keeps you in view keeps charging
+  alarmDecay: 9,           // per second, once nothing is looking at you
+  decayDelay: 1.2,         // seconds of grace after the last cone lets go
 
   guardSightRange: 250,
   guardSightHalfAngle: 0.42,

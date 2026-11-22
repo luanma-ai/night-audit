@@ -94,7 +94,7 @@ export function paintCover(ctx, game, t = 0) {
   // the tagline sits below the two title lines, never inside them
   ctx.fillStyle = 'rgba(226, 236, 255, 0.92)';
   ctx.font = 'bold 17px ui-monospace, monospace';
-  ctx.fillText('Three pieces. Six guards. Cameras everywhere.', 64, H - 22);
+  ctx.fillText('Three pieces. Eight guards. Cameras everywhere.', 64, H - 22);
 
   // the three loot diamonds as a poster badge, top right
   const bx = W - 210;

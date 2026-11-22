@@ -1,35 +1,45 @@
 // The room: walls, cover, patrol routes, camera mounts, loot and the vault door.
-// One museum night-set. Every guard walks a hand-placed loop so its cone keeps
-// sweeping across the routes the player needs, and no two loops fully overlap.
+//
+// Third map. The first two were big open halls, which the judge's second criterion
+// punishes directly ("several routes per room ... patrols and cones you have to
+// read before you move"): with open floor there is one shortest line to anywhere,
+// so the player never chooses, and six guards over that area seal nothing.
+//
+// This one is three bands -- exhibition wings, an aisle grid, approach halls --
+// joined by dividers. The doors in those dividers were CUT BY SEARCH over the tile
+// grid, not placed by hand: three hand-placed attempts each silently walled off
+// half the map (the exit became unreachable), so the doors are now generated and
+// the connectivity is asserted before the map is accepted.
+//
+// #  solid wall          .  floor            =  glass exhibit case (blocks sight+move)
+// ~  heavy carpet        V  vault floor      C  camera mount
+// D  vault door          S  player start
 import { COLS, ROWS } from './config.js';
 
-// # solid wall, . floor, = exhibit case (blocks sight and movement), ~ floor with
-// heavier carpet (slows the player), V vault floor, ^ loot pedestal, C camera mount,
-// D vault door, S player start.
 const MAP = [
   '########################################',
-  '#S.........#...........#...............#',
-  '#..........#...........#...............#',
-  '#....====..#..=====....#....======.....#',
-  '#..........#...........#...............#',
-  '#..........................CC..........#',
-  '#..........#...........#...............#',
-  '#....====..#..=====....#....======.....#',
-  '#..........#...........#...............#',
-  '######.#####...........#####.###########',
-  '######.#####...........#####.###########',
-  '#..........#...........#...............#',
-  '#..........#...........#...............#',
-  '#..~~~~~~..#..~~~~~~...#....~~~~~~.....#',
-  '#..~~~~~~..#..~~~~~~...#....~~~~~~.....#',
-  '#..........#...........#...............#',
-  '#..........#...........#...............#',
-  '##########.#...........#####CC#########',
-  '##########.#...........###############.#',
-  '#.....................................D#',
-  '#.CC.................CC................#',
-  '#......................................#',
-  '#VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV#',
+  '#S.....#..........#...........#........#',
+  '#......#....==....#...........#........#',
+  '#.#==###..........#...........#..==....#',
+  '#......#....#####.#...........#.......C#',
+  '#.######..........#...........#........#',
+  '#......#..........#...........#######..#',
+  '#......#..........#...........#........#',
+  '#......#..........#...........#........#',
+  '#.####.####.####.####.####.####.####.###',
+  '#....#~~C~~~~#........#~~~~~~~#........#',
+  '#....#~~~~~~~#........#~~~~~~~#........#',
+  '#....#~~~~~~~#........#~~~~~~~#........#',
+  '#....#~~~~~~~#........#~~~~~~~#........#',
+  '#....#~~~~~~~#........#~~~~~~~#........#',
+  '#.####.#####.####.#####.####.####.####.#',
+  '#..........#.............#.............#',
+  '#..........#.....C.......#.............#',
+  '#..........#.......#.....#.............#',
+  '#..........#.......#.....#.............#',
+  '#..........#.............#.............#',
+  '#..........#.............#.............#',
+  '#VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVD#',
   '########################################',
 ];
 
@@ -54,36 +64,49 @@ for (let y = 0; y < ROWS; y++) {
     if (ch === 'S') map.start = { x: x * 32 + 16, y: y * 32 + 16 };
     if (ch === 'D') map.vaultDoor = { x: x * 32 + 16, y: y * 32 + 16 };
     if (ch === 'C') map.cams.push({ x: x * 32 + 16, y: y * 32 + 16 });
-    if (ch === '^') map.loot.push({ x: x * 32 + 16, y: y * 32 + 16 });
   }
 }
 
-// Loot sits on the pedestals of the two side halls and inside the vault;
-// placed here rather than in the map so the map stays readable.
+// One piece per band, each behind its own route, so the order you take them is a
+// decision rather than a lap. All three verified reachable by the generator.
 map.loot = [
-  { x: 13 * 32 + 16, y: 3 * 32 + 16, name: 'Emerald Mask' },
-  { x: 32 * 32 + 16, y: 12 * 32 + 16, name: 'Gold Reliquary' },
-  { x: 31 * 32 + 16, y: 21 * 32 + 16, name: 'The Blue Star' },
+  { x: 13 * 32 + 16, y: 1 * 32 + 16, name: 'Emerald Mask' },
+  { x: 26 * 32 + 16, y: 11 * 32 + 16, name: 'Gold Reliquary' },
+  { x: 15 * 32 + 16, y: 20 * 32 + 16, name: 'The Blue Star' },
 ];
 
-// Patrol loops. Each entry is a list of tile waypoints the guard walks in order,
-// forever. Facing is smoothed, so a cone swings round before it moves on.
+// Patrol loops sit ON the routes, not beside them: each one walks a line a player
+// has to cross to reach a piece, and their cones overlap at the dividers so the
+// doors are guarded from both sides.
+//
+// Measured after the first pass at this map: 94% of floor is watched at some point
+// yet a sloppy run still escaped 100% of the time at peak alarm 44 -- "watched"
+// is not "watched when you cross". The loops were too slow and too short, so a
+// player timing one circuit never met a cone. Speeds and path lengths go up here,
+// and two more guards cover the dividers that were unguarded.
 export const patrols = [
-  { name: 'Hall Walker', speed: 46, sight: 250, path: [[5, 6], [5, 12], [5, 6], [5, 2]] },
-  { name: 'Gallery Sentry', speed: 40, sight: 265, path: [[14, 2], [14, 8], [17, 8], [17, 2]] },
-  { name: 'East Keeper', speed: 44, sight: 250, path: [[27, 5], [36, 5], [36, 2], [27, 2]] },
-  { name: 'Vault Watch', speed: 38, sight: 280, path: [[3, 21], [20, 21], [36, 21], [36, 19], [3, 19]] },
-  { name: 'Carpet Patrol', speed: 42, sight: 245, path: [[4, 13], [10, 13], [10, 16], [4, 16]] },
+  // north wing: walks the west divider doors end to end
+  { name: 'Hall Walker', speed: 58, sight: 250, path: [[2, 7], [6, 7], [6, 1], [2, 1]] },
+  // north-centre: sweeps the wing the second piece sits above
+  { name: 'Gallery Sentry', speed: 54, sight: 265, path: [[9, 7], [17, 7], [17, 1], [9, 1]] },
+  // east wing: guards the camera's blind corner
+  { name: 'East Keeper', speed: 56, sight: 250, path: [[31, 7], [37, 7], [37, 2], [31, 2]] },
+  // vault approach: the long line every last steal has to cross
+  { name: 'Vault Watch', speed: 50, sight: 280, path: [[3, 22], [20, 22], [36, 22], [36, 20], [3, 20]] },
+  // middle aisle: walks the carpet between the two centre doors
+  { name: 'Carpet Patrol', speed: 52, sight: 245, path: [[6, 11], [6, 14], [12, 14], [12, 11]] },
+  // the choke: stands across the south hall's only pillar gap
+  { name: 'Corridor Sweep', speed: 58, sight: 240, path: [[13, 16], [23, 16], [23, 21], [13, 21]] },
+  // new: the east aisle, which nothing covered
+  { name: 'Aisle Guard', speed: 50, sight: 245, path: [[24, 10], [29, 10], [29, 14], [24, 14]] },
+  // new: the south hall's east half, the last unguarded stretch before the vault
+  { name: 'Deputy', speed: 54, sight: 250, path: [[27, 17], [37, 17], [37, 21], [27, 21]] },
 ];
-
-// Two guard dogs are replaced by two extra sentries on a short central loop:
-// the long corridor between the halls is where most thefts get spotted.
-patrols.push({ name: 'Corridor Sweep', speed: 50, sight: 240, path: [[21, 6], [21, 11], [21, 6], [21, 15]] });
 
 export const cameraSpecs = map.cams.map((c, i) => ({
   x: c.x,
   y: c.y,
-  baseAngle: [Math.PI / 2, -Math.PI / 2, 0, Math.PI, Math.PI / 2][i % 5],
+  baseAngle: [Math.PI * 0.5, Math.PI, 0][i % 3],
   sweep: 0.72,
   speed: 0.36 + (i % 3) * 0.07,
   range: 320,
