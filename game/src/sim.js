@@ -35,6 +35,11 @@ export function createGame() {
     facing: 0,
     alert: 0,
     sees: false,
+    cooldown: 0,
+    charging: false,
+    alerted: 0,
+    sightings: 0,
+    alertTimer: 0,
     index: i,
   }));
 
@@ -48,6 +53,8 @@ export function createGame() {
     facing: c.baseAngle,
     sees: false,
     down: 0,
+    cooldown: 0,
+    charging: false,
     index: i,
   }));
 
@@ -66,6 +73,7 @@ export function createGame() {
     vault: { open: false, unlocked: map.vaultDoor },
     messages: [],
     escapeAt: 0,
+    quietFor: 0,
   };
 
   function say(text, life = 3.2) {
@@ -170,6 +178,34 @@ export function createGame() {
   function updateGuards(dt) {
     for (const g of guards) {
       g.sees = false;
+
+      // A guard who has seen you breaks off the patrol and closes in. It gives up
+      // after a few seconds out of sight and walks back, so one slip costs alarm,
+      // distance and a few seconds -- never an instant, unfair loss.
+      if (g.alerted > 0) {
+        g.alerted -= dt;
+        const ax = player.x - g.x;
+        const ay = player.y - g.y;
+        const ad = Math.hypot(ax, ay) || 1;
+        const chaseAngle = Math.atan2(ay, ax);
+        g.facing += angleDelta(g.facing, chaseAngle) * Math.min(1, dt * 8);
+        const lunge = g.speed * 2.1 * dt;
+        if (ad > 26) moveCircle(map, g, Math.cos(chaseAngle) * lunge, Math.sin(chaseAngle) * lunge, 10);
+        if (ad < 22 && state.alarm < 100) {
+          // caught in the open: the guard holds you and the alarm climbs, but
+          // slowly enough that turning and running still saves the night
+          state.alarm += 22 * dt;
+          if (!state.spotted) {
+            state.spotted = true;
+            state.spottedBy = g.name;
+            say(`${g.name} has you. Break away!`, 1.6);
+          }
+        }
+        const stillSees = inCone(map, g, g.facing, g.half * 1.35, g.sight, player);
+        g.sees = stillSees;
+        continue;
+      }
+
       const target = g.path[g.leg];
       const d = dist(g.x, g.y, target.x, target.y);
       if (g.wait > 0) {
@@ -189,13 +225,26 @@ export function createGame() {
       const sees = inCone(map, g, g.facing, g.half, g.sight, player);
       g.sees = sees;
       if (sees) {
-        const closing = clamp(1 - dist(g.x, g.y, player.x, player.y) / g.sight, 0.2, 1);
-        const covered = player.sneak ? 0.45 : 1;
-        state.alarm += config.alarmRise * closing * covered * dt;
+        chargeSighting(g, 'guard', dt);
+        // seeing you twice within the cooldown means you stayed in the light
+        g.sightings++;
+        if (g.sightings >= 2) {
+          g.alerted = config.chaseSeconds;
+          g.sightings = 0;
+          say(`${g.name} is coming. Run.`, 1.8);
+        } else {
+          g.alertTimer = config.loseInterestSeconds;
+        }
         if (!state.spotted) {
           state.spotted = true;
           state.spottedBy = g.name;
           say(`${g.name} has eyes on you.`, 2.4);
+        }
+      } else {
+        g.cooldown = Math.max(0, g.cooldown - dt);
+        if (g.sightings > 0) {
+          g.alertTimer -= dt;
+          if (g.alertTimer <= 0) g.sightings = 0;
         }
       }
     }
@@ -211,13 +260,39 @@ export function createGame() {
       const sees = inCone(map, c, c.facing, 0.34, c.range, player);
       c.sees = sees;
       if (sees) {
-        state.alarm += config.alarmRise * 0.7 * dt;
+        chargeSighting(c, 'camera', dt);
         if (!state.spotted) {
           state.spotted = true;
           state.spottedBy = 'Camera';
           say('A camera found you. Kill the lights.');
         }
+      } else {
+        c.cooldown = Math.max(0, c.cooldown - dt);
       }
+    }
+  }
+
+  // Being seen costs a chunk of alarm once, then keeps charging at a slower rate
+  // while the viewer holds you. A guard who loses you must wait before charging
+  // again, so breaking line of sight is the move that saves a run.
+  function chargeSighting(watcher, kind, dt) {
+    const isCamera = kind === 'camera';
+    const base = isCamera ? config.cameraSightCost : config.sightCost;
+    const range = isCamera ? config.cameraSightRange : config.guardSightRange;
+    const d = dist(watcher.x, watcher.y, player.x, player.y);
+    // close sightings hurt more; a cone that only just catches you costs less
+    const closeness = 1 - 0.55 * clamp((d - config.sightCloseRange) / (range - config.sightCloseRange), 0, 1);
+    const hide = player.sneak ? 0.55 : 1;
+    const cost = base * closeness * hide;
+
+    if (watcher.cooldown <= 0) {
+      state.alarm += cost;
+      watcher.cooldown = config.refireSeconds;
+      watcher.charging = false;
+    } else {
+      // still held: keep it climbing, but far slower than the first hit
+      state.alarm += cost * 0.45 * dt;
+      watcher.charging = true;
     }
   }
 
@@ -252,9 +327,13 @@ export function createGame() {
 
     const lit = guards.some((g) => g.sees) || cameras.some((c) => c.sees);
     if (!lit) {
-      state.alarm -= config.alarmDecay * dt;
+      // The alarm lingers: a short grace after the last cone lets go, then it bleeds.
+      state.quietFor += dt;
+      if (state.quietFor > config.decayDelay) state.alarm -= config.alarmDecay * dt;
       state.spotted = false;
       state.spottedBy = '';
+    } else {
+      state.quietFor = 0;
     }
     state.alarm = clamp(state.alarm, 0, 100);
 

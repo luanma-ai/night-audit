@@ -4,7 +4,7 @@ import { W, H } from './config.js';
 import { createInput } from './input.js';
 import { createGame } from './sim.js';
 import { draw, drawTitleRoom } from './render.js';
-
+import { drawTitle } from './title.js';
 import { SHOTS } from './shots.js';
 
 function makeCanvas() {
